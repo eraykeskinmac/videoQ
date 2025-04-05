@@ -1,0 +1,37 @@
+{
+  "name": "video-summarizer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/morgan": "^1.9.9",
+    "@typescript-eslint/eslint-plugin": "^8.29.0",
+    "@typescript-eslint/parser": "^8.29.0",
+    "eslint": "^9.23.0",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "morgan": "^1.10.0",
+    "pg": "^8.14.1",
+    "typeorm": "^0.3.21",
+    "typescript": "^5.8.2",
+    "winston": "^3.17.0"
+  }
+}
