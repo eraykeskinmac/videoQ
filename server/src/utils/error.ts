@@ -1,3 +1,5 @@
+import logger from "./logger";
+
 export class AppError extends Error {
   constructor(
     public statusCode: number,
@@ -9,4 +11,19 @@ export class AppError extends Error {
   }
 }
 
-export const handleError = (error: Error) => {};
+export const handleError = (error: Error | AppError) => {
+  if (error instanceof AppError && error.isOperational) {
+    return {
+      status: "error",
+      statusCode: error.statusCode,
+      message: error.message,
+    };
+  }
+
+  logger.error(error);
+  return {
+    status: "error",
+    statusCode: 500,
+    message: "Internal server error",
+  };
+};
