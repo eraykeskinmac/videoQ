@@ -1,12 +1,13 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
-import express, { Express, Request, Response } from "express";
+import express, { Express, NextFunction, Request, Response } from "express";
 import logger, { stream } from "./utils/logger";
 import { AppDataSource } from "./config/database";
 import morgan from "morgan";
 import cors from "cors";
 import routes from "./routes";
 import { errorResponse } from "./utils/response";
+import { handleError } from "./utils/error";
 
 dotenv.config();
 
@@ -46,7 +47,14 @@ app.use((req: Request, res: Response) => {
     .json(errorResponse(`Cannot find  ${req.originalUrl} on this server!`));
 });
 
+app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+  logger.error(error.stack || error.message);
+  const errorDetails = handleError(error);
 
+  res
+    .status(errorDetails.statusCode)
+    .json(errorResponse(errorDetails.message, error));
+});
 
 initialize().catch((error) => {
   logger.error("Failed to initialize server", error);
