@@ -25,12 +25,18 @@
     "ts-node": "^10.9.2"
   },
   "dependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.9",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
+    "http-status-code": "^2.1.0",
+    "http-status-codes": "^2.3.0",
+    "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "pg": "^8.14.1",
-    "typeorm": "^0.3.21",
+    "typeorm": "^0.3.22",
     "typescript": "^5.8.2",
     "winston": "^3.17.0"
   }

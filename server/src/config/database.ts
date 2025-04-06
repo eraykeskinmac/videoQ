@@ -1,3 +1,4 @@
+import { User } from "../entities/user.entity";
 import { DataSource } from "typeorm";
 
 export const AppDataSource = new DataSource({
@@ -8,7 +9,8 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || "postgres",
   database: process.env.DB_DATABASE || "video_summarizer",
   logging: ["query", "error"],
-  entities: [],
+  entities: [User],
   migrations: [],
   subscribers: [],
+  synchronize: true,
 });
