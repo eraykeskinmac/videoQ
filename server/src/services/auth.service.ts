@@ -61,6 +61,33 @@ export class AuthService {
     return { user, token };
   }
 
+  static async verifyEmail(token: string) {
+    const user = await this.userRepository.findOne({
+      where: { emailVerificationToken: token },
+    });
+
+    if (!user) {
+      throw new AppError(StatusCodes.BAD_REQUEST, "Invalid verification token");
+    }
+
+    if (
+      !user.emailVerificationTokenExpiresAt ||
+      user.emailVerificationTokenExpiresAt < new Date()
+    ) {
+      throw new AppError(StatusCodes.BAD_REQUEST, "Verification token expired");
+    }
+
+    user.isEmailVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationTokenExpiresAt = null;
+
+    await this.userRepository.save(user);
+
+    //  TODO: Send Welcome mail
+
+    return { message: "Email verified successfully" };
+  }
+
   static generateToken(user: User): string {
     return jwt.sign({ userId: user.id, email: user.email }, this.JWT_SECRET, {
       expiresIn: this.JWT_EXPIRES_IN,
