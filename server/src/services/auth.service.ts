@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 import crypto from "crypto";
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
 import { STATUS_CODES } from "http";
+import { EmailService } from "./email.service";
 
 export class AuthService {
   private static readonly userRepository = AppDataSource.getRepository(User);
@@ -35,6 +36,8 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // TODO: Send verification email
+
+    await EmailService.sendVerificationEmail(email, verificationToken);
 
     const token = this.generateToken(user);
     return { user, token };
