@@ -25,6 +25,7 @@
     "ts-node": "^10.9.2"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.9",
     "bcrypt": "^5.1.1",
@@ -39,6 +40,8 @@
     "resend": "^4.2.0",
     "typeorm": "^0.3.22",
     "typescript": "^5.8.2",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "youtube-dl-exec": "^3.0.20",
+    "ytdl-core": "^4.11.5"
   }
 }
