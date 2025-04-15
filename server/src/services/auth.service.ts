@@ -4,7 +4,6 @@ import { User } from "../entities/user.entity";
 import { StatusCodes } from "http-status-codes";
 import crypto from "crypto";
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
-import { STATUS_CODES } from "http";
 import { EmailService } from "./email.service";
 
 export class AuthService {
@@ -34,8 +33,6 @@ export class AuthService {
     user.emailVerificationTokenExpiresAt = tokenExpires;
 
     await this.userRepository.save(user);
-
-    // TODO: Send verification email
 
     await EmailService.sendVerificationEmail(email, verificationToken);
 
@@ -80,12 +77,35 @@ export class AuthService {
     user.isEmailVerified = true;
     user.emailVerificationToken = null;
     user.emailVerificationTokenExpiresAt = null;
-
     await this.userRepository.save(user);
 
-    //  TODO: Send Welcome mail
+    await EmailService.sendWelcomeEmail(user.email, user.name);
 
     return { message: "Email verified successfully" };
+  }
+
+  static async resendVerificationEmail(email: string) {
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      throw new AppError(StatusCodes.BAD_REQUEST, "User not found");
+    }
+
+    if (user.isEmailVerified) {
+      throw new AppError(StatusCodes.BAD_REQUEST, "Email already verified");
+    }
+
+    // Create new verification token
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const tokenExpires = new Date();
+    tokenExpires.setHours(tokenExpires.getHours() + 24); // 24 hours
+
+    user.emailVerificationToken = verificationToken;
+    user.emailVerificationTokenExpiresAt = tokenExpires;
+    await this.userRepository.save(user);
+
+    await EmailService.sendVerificationEmail(email, verificationToken);
+    return { message: "Verification email sent" };
   }
 
   static generateToken(user: User): string {
