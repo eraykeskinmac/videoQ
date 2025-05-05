@@ -11,4 +11,11 @@ Authorization: Bearer {{authToken}}
     "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 }
 
-
+### Download Audio
+# @name downloadAudio
+POST {{baseUrl}}/video/audio
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+{
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+}
