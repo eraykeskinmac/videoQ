@@ -83,4 +83,59 @@ export class VideoService {
       );
     }
   }
+
+  static async downloadAudio(url: string): Promise<string> {
+    try {
+      await this.ensureDirExists();
+
+      const videoId = ytdl.getVideoID(url);
+      const audioPath = path.join(this.AUDIO_DIR, `${videoId}.mp3`);
+
+      await youtubeDl(url, {
+        extractAudio: true,
+        audioFormat: "mp3",
+        audioQuality: 0,
+        output: audioPath,
+        noWarnings: true,
+        ffmpegLocation: ffmpeg.path,
+      });
+
+      const fileStats = await import("fs/promises").then((fs) =>
+        fs.stat(audioPath)
+      );
+
+      if (fileStats.size === 0) {
+        throw new AppError(
+          StatusCodes.INTERNAL_SERVER_ERROR,
+          "Failed to download audio"
+        );
+      }
+
+      return audioPath;
+    } catch (error) {
+      logger.error("Error downloading audio", { error });
+      if (error instanceof Error) {
+        if (error.message.includes("ffmpeg")) {
+          throw new AppError(
+            StatusCodes.INTERNAL_SERVER_ERROR,
+            "Failed to download audio"
+          );
+        }
+        if (error.message.includes("Private Video")) {
+          throw new AppError(StatusCodes.FORBIDDEN, "This video is private");
+        }
+        if (error.message.includes("not available")) {
+          throw new AppError(StatusCodes.NOT_FOUND, "Video not found");
+        }
+        throw new AppError(
+          StatusCodes.INTERNAL_SERVER_ERROR,
+          "Failed to download audio"
+        );
+      }
+      throw new AppError(
+        StatusCodes.INTERNAL_SERVER_ERROR,
+        "Failed to download audio"
+      );
+    }
+  }
 }
