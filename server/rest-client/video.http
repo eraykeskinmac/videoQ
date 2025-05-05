@@ -1,0 +1,14 @@
+@baseUrl = http://localhost:8080/api/v1
+
+@authToken =
+
+### Get Video Info
+# @name getVideoInfo
+POST {{baseUrl}}/video/info
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+{
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+}
+
+

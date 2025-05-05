@@ -113,4 +113,15 @@ export class AuthService {
       expiresIn: this.JWT_EXPIRES_IN,
     });
   }
+
+  static verifyToken(token: string): { userId: string; email: string } {
+    try {
+      return jwt.verify(token, this.JWT_SECRET) as {
+        userId: string;
+        email: string;
+      };
+    } catch (error) {
+      throw new AppError(StatusCodes.UNAUTHORIZED, "Invalid token");
+    }
+  }
 }
