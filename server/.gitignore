@@ -1,6 +1,7 @@
 # Project specific
 /node_modules
 /logs
+/rest-client
 
 # Logs
 logs
