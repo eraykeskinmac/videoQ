@@ -8,6 +8,7 @@ import cors from "cors";
 import routes from "./routes";
 import { errorResponse } from "./utils/response";
 import { handleError } from "./utils/error";
+import { JobsService } from "./services/job.service";
 
 dotenv.config();
 
@@ -18,6 +19,9 @@ const initialize = async () => {
   try {
     await AppDataSource.initialize();
     logger.info("Database connected");
+
+    await JobsService.initialize();
+    logger.info("Jobs service initialized");
 
     app.listen(port, () => {
       logger.info(`Server is running on port ${port}`);
