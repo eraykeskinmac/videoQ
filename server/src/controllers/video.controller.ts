@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { VideoService } from "../services/video.service";
 import { successResponse } from "../utils/response";
+import { AuthService } from "../services/auth.service";
 
 export class VideoController {
   static async getVideoInfo(req: Request, res: Response, next: NextFunction) {
@@ -31,4 +32,17 @@ export class VideoController {
       next(error);
     }
   }
+
+  static async transcribeVideo(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    const { url } = req.body;
+    const userId = req.user?.userId;
+
+    const user = await AuthService.getUserById(userId!);
+    const videoInfo = await VideoService.getVideoInfo(url);
+  }
+  catch(error: Error) {}
 }
