@@ -7,6 +7,9 @@ import { User } from "../entities/user.entity";
 import { VideoService } from "./video.service";
 import { TranscriptionService } from "./transcription.service";
 import { unlink } from "fs/promises";
+import { AIService } from "./ai.service";
+import { AppError } from "../utils/error";
+import logger from "../utils/logger";
 
 interface TranscriptionJob {
   url: string;
@@ -124,7 +127,118 @@ export class JobsService {
             status: "completed",
           };
         }
-      } catch (error) {}
+
+        // analyze video
+        const analysisResult = await AIService.analyzeTranscription(
+          transcriptionResult.text,
+          videoInfo
+        );
+
+        let analysis = await this.analysisRepository.findOne({
+          where: { video: { id: video.id } },
+        });
+
+        if (analysis) {
+          Object.assign(analysis, analysisResult);
+        } else {
+          analysis = new Analysis();
+          Object.assign(analysis, analysisResult);
+          analysis.video = video;
+        }
+        await this.analysisRepository.save(analysis);
+
+        video.status = "completed";
+        await this.videoRepository.save(video);
+
+        job.progress(100);
+        return {
+          videoInfo,
+          transcription: transcriptionResult,
+          analysis: analysisResult,
+          status: "completed",
+        };
+      } catch (error) {
+        if (audioPath) {
+          await unlink(audioPath).catch(() => {});
+        }
+
+        if (video) {
+          video.status = "failed";
+          await this.videoRepository.save(video);
+        }
+
+        logger.error("Error processing video:", error);
+
+        if (
+          error instanceof AppError &&
+          (error.message.includes("No speech detected") ||
+            error.message.includes("This video is private") ||
+            error.message.includes("This video is no longer available"))
+        ) {
+          return {
+            error: error.message,
+            status: "failed",
+            final: true,
+          };
+        }
+        throw error;
+      }
     });
+
+    this.transcriptionQueue.on("completed", async (job, result) => {
+      try {
+        const user = await this.userRepository.findOne({
+          where: { id: job.data.userId },
+        });
+
+        if (user && result.videoInfo) {
+          // TODO: send a job completion email
+        }
+      } catch (error) {
+        logger.error("Error sending job completion email:", error);
+      }
+    });
+
+    this.transcriptionQueue.on("failed", async (job, error) => {
+      logger.error(`Job ${job.id} failed: ${error}`);
+    });
+
+    this.transcriptionQueue.on("error", async (error) => {
+      logger.error("Transcription queue error:", error);
+    });
+
+    // clean up stuck jobs
+    this.transcriptionQueue.clean(24 * 3600 * 1000, "delayed");
+    this.transcriptionQueue.clean(24 * 3600 * 1000, "wait");
+    this.transcriptionQueue.clean(24 * 3600 * 1000, "active");
+  }
+
+  static async addTranscriptionJob(url: string, videoInfo?: any, user?: any) {
+    let video = await this.videoRepository.findOne({ where: { url } });
+
+    if (!video) {
+      video = new Video();
+      video.url = url;
+      video.status = "pending";
+      video.user = user;
+      if (videoInfo) {
+        Object.assign(video, {
+          title: videoInfo.title,
+          description: videoInfo.description,
+          duration: videoInfo.duration,
+          author: videoInfo.author,
+          thumbnail: videoInfo.thumbnailUrl || videoInfo.thumbnail,
+        });
+      }
+      await this.videoRepository.save(video);
+    }
+
+    const job = await this.transcriptionQueue.add({
+      url,
+      videoInfo,
+      userId: video.user.id,
+    });
+
+    return { jobId: job.id };
   }
 }
