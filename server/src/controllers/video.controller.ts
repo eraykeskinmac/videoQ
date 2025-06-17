@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { VideoService } from "../services/video.service";
 import { successResponse } from "../utils/response";
 import { AuthService } from "../services/auth.service";
+import { JobsService } from "../services/job.service";
 
 export class VideoController {
   static async getVideoInfo(req: Request, res: Response, next: NextFunction) {
@@ -38,11 +39,28 @@ export class VideoController {
     res: Response,
     next: NextFunction
   ) {
-    const { url } = req.body;
-    const userId = req.user?.userId;
+    try {
+      const { url } = req.body;
+      const userId = req.user?.userId;
 
-    const user = await AuthService.getUserById(userId!);
-    const videoInfo = await VideoService.getVideoInfo(url);
+      const user = await AuthService.getUserById(userId!);
+      const videoInfo = await VideoService.getVideoInfo(url);
+
+      const { jobId } = await JobsService.addTranscriptionJob(
+        url,
+        videoInfo,
+        user
+      );
+
+      res.json(
+        successResponse({
+          jobId,
+          videoInfo,
+          message: "Transcription job added successfully",
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
   }
-  catch(error: Error) {}
 }
