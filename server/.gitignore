@@ -2,6 +2,7 @@
 /node_modules
 /logs
 /rest-client
+google-credentials.json
 
 # Logs
 logs
