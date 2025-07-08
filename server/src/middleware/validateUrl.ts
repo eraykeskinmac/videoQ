@@ -18,9 +18,9 @@ export const validateYoutubeUrl = (
     return next(new AppError(StatusCodes.BAD_REQUEST, "Invalid URL"));
   }
 
-  // check if url is youtube url
+  // check if url is youtube url - updated regex to allow additional query parameters
   const youtubeUrlRegex =
-    /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})$/;
+    /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})(&.*)?$/;
 
   if (!youtubeUrlRegex.test(url)) {
     return next(
