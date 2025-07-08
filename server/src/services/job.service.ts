@@ -10,6 +10,7 @@ import { unlink } from "fs/promises";
 import { AIService } from "./ai.service";
 import { AppError } from "../utils/error";
 import logger from "../utils/logger";
+import { StatusCodes } from "http-status-codes";
 
 interface TranscriptionJob {
   url: string;
@@ -27,6 +28,11 @@ export class JobsService {
     AppDataSource.getRepository(Analysis);
 
   private static readonly userRepository = AppDataSource.getRepository(User);
+
+  static getTranscriptionQueue() {
+    return this.transcriptionQueue;
+  }
+
   static async initialize() {
     this.transcriptionQueue = new Bull<TranscriptionJob>("transcription", {
       redis: {
@@ -240,5 +246,108 @@ export class JobsService {
     });
 
     return { jobId: job.id };
+  }
+
+  static async getJobStatus(jobId: string) {
+    const job = await this.transcriptionQueue.getJob(jobId);
+    if (!job) {
+      throw new AppError(StatusCodes.NOT_FOUND, "Job not found");
+    }
+
+    const state = await job.getState();
+    const progress = await job.progress();
+    const result = await job.returnvalue;
+    const failedReason = await job.failedReason;
+    const attempts = await job.attemptsMade;
+
+    let videoStatus = null;
+    if (result?.videoInfo?.url) {
+      const video = await this.videoRepository.findOne({
+        where: { url: result.videoInfo.url },
+        relations: ["transcription", "analysis"],
+      });
+      if (video) {
+        videoStatus = {
+          id: video.id,
+          status: video.status,
+          hasTranscription: !!video.transcription,
+          hasAnalysis: !!video.analysis,
+        };
+      }
+    }
+
+    return {
+      id: job.id,
+      result,
+      state,
+      progress,
+      failedReason,
+      attempts,
+      videoStatus,
+      final: result?.final || state === "completed" || attempts >= 3,
+    };
+  }
+
+  static async getAllJobs(userId: string) {
+    // get jobs in different states
+    const activeJobs = await this.transcriptionQueue.getActive();
+    const waitingJobs = await this.transcriptionQueue.getWaiting();
+    const completedJobs = await this.transcriptionQueue.getCompleted();
+    const delayedJobs = await this.transcriptionQueue.getDelayed();
+    const failedJobs = await this.transcriptionQueue.getFailed();
+
+    // combine all jobs and sort by createdAt
+    const jobs = [
+      ...activeJobs,
+      ...waitingJobs,
+      ...completedJobs,
+      ...delayedJobs,
+      ...failedJobs,
+    ];
+
+    // filter jobs by user ID and sort by timestamp (most recent first)
+    const userJobs = jobs.filter((job) => job.data.userId === userId);
+    userJobs.sort((a, b) => (b.timestamp = a.timestamp));
+
+    const jobDetails = await Promise.all(
+      userJobs.map(async (job) => {
+        const state = await job.getState();
+        return {
+          id: job.id,
+          state,
+          progress: job.progress(),
+          data: job.data,
+          timestamp: job.timestamp,
+          processedOn: job.processedOn,
+          finishedOn: job.finishedOn,
+          failedReason: job.failedReason,
+          attempts: job.attemptsMade,
+          videoStatus: job.data.videoInfo?.url
+            ? await this.getVideoStatus(job.data.url)
+            : null,
+        };
+      })
+    );
+
+    return jobDetails;
+  }
+
+  // helper method to get video status
+  private static async getVideoStatus(url: string) {
+    const video = await this.videoRepository.findOne({
+      where: { url },
+      relations: ["transcription", "analysis"],
+    });
+
+    if (!video) return null;
+
+    return {
+      id: video.id,
+      status: video.status,
+      hasTranscription: !!video.transcription,
+      hasAnalysis: !!video.analysis,
+      title: video.title,
+      thumbnail: video.thumbnail,
+    };
   }
 }
