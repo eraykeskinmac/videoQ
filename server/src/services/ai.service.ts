@@ -1,7 +1,7 @@
 import {
   GenerateContentRequest,
   GoogleGenerativeAI,
-} from "@google/generative-ai/dist/generative-ai";
+} from "@google/generative-ai";
 import { AppError } from "../utils/error";
 import { StatusCodes } from "http-status-codes";
 
@@ -18,7 +18,7 @@ export class AIService {
     process.env.GOOGLE_API_KEY!
   );
   private static readonly model = AIService.genAI.getGenerativeModel({
-    model: "gemini-pro",
+    model: "gemini-2.0-flash",
   });
 
   private static generatePrompt(
