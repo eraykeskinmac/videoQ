@@ -9,11 +9,15 @@ import routes from "./routes";
 import { errorResponse } from "./utils/response";
 import { handleError } from "./utils/error";
 import { JobsService } from "./services/job.service";
+import { ExpressAdapter } from "@bull-board/express";
+import { createBullBoard } from "@bull-board/api";
+import { BullAdapter } from "@bull-board/api/bullAdapter";
 
 dotenv.config();
 
 const app: Express = express();
 const port = process.env.PORT || 6000;
+const adminPort = process.env.ADMIN_PORT || 8081;
 
 const initialize = async () => {
   try {
@@ -21,7 +25,25 @@ const initialize = async () => {
     logger.info("Database connected");
 
     await JobsService.initialize();
+    await JobsService.setupQueueHandlers();
     logger.info("Jobs service initialized");
+
+    // initialize bull board
+    const serverAdapter = new ExpressAdapter();
+    const adminApp = express();
+
+    createBullBoard({
+      queues: [new BullAdapter(JobsService.getTranscriptionQueue())],
+      serverAdapter,
+    });
+
+    adminApp.use(cors());
+    serverAdapter.setBasePath("/admin/queues");
+    adminApp.use("/admin/queues", serverAdapter.getRouter());
+
+    adminApp.listen(adminPort, () => {
+      logger.info(`BullMQ Admin is running on port ${adminPort}`);
+    });
 
     app.listen(port, () => {
       logger.info(`Server is running on port ${port}`);

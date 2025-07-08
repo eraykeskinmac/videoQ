@@ -27,6 +27,8 @@
     "ts-node": "^10.9.2"
   },
   "dependencies": {
+    "@bull-board/api": "^6.10.1",
+    "@bull-board/express": "^6.10.1",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@google-cloud/speech": "^7.1.0",
     "@google-cloud/storage": "^7.16.0",

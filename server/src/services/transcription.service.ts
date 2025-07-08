@@ -1,10 +1,14 @@
 import { protos, SpeechClient } from "@google-cloud/speech";
+import { Storage } from "@google-cloud/storage";
 import logger from "../utils/logger";
 import { StatusCodes } from "http-status-codes/build/cjs";
 import { AppError } from "../utils/error";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { unlink } from "fs/promises";
+import ffmpedInstaller from "@ffmpeg-installer/ffmpeg";
+
+ffmpeg.setFfmpegPath(ffmpedInstaller.path);
 
 export interface TranscriptionService {
   text: string;
@@ -13,26 +17,21 @@ export interface TranscriptionService {
 }
 
 export class TranscriptionService {
-  private static readonly BUCKET_NAME = "ai-video-summarizer-audio";
+  private static readonly BUCKET_NAME = "ai-video-summarizer";
   private static readonly speechClient = new SpeechClient();
   private static readonly storage = new Storage();
 
   static async ensureBucketExists() {
     try {
-      const [exists] = await this.storage.bucket(this.BUCKET_NAME).exists();
-
-      if (exists) {
-        await this.storage.createBucket(this.BUCKET_NAME, {
-          location: "US",
-          storageClass: "STANDARD",
-        });
-        logger.info(`Bucket ${this.BUCKET_NAME} created`);
-      }
+      // Skip bucket existence check for now due to permission issues
+      // The bucket should be created manually or the service account should have proper permissions
+      logger.info(`Skipping bucket existence check for ${this.BUCKET_NAME}`);
+      return;
     } catch (error) {
-      logger.error(`Error creating bucket ${this.BUCKET_NAME}: ${error}`);
+      logger.error(`Error checking bucket ${this.BUCKET_NAME}: ${error}`);
       throw new AppError(
         StatusCodes.INTERNAL_SERVER_ERROR,
-        "Failed to create bucket"
+        "Failed to access bucket"
       );
     }
   }
@@ -42,6 +41,10 @@ export class TranscriptionService {
     const bucket = this.storage.bucket(this.BUCKET_NAME);
 
     try {
+      logger.info(
+        `Attempting to upload ${filename} to bucket ${this.BUCKET_NAME}`
+      );
+
       await bucket.upload(filePath, {
         destination: filename,
         metadata: {
@@ -50,11 +53,24 @@ export class TranscriptionService {
       });
 
       const gcsUrl = `gs://${this.BUCKET_NAME}/${filename}`;
-      logger.info(`Uploaded to GCS: ${gcsUrl}`);
+      logger.info(`Successfully uploaded to GCS: ${gcsUrl}`);
 
       return gcsUrl;
     } catch (error) {
-      logger.error(`Error uploading to GCS: ${error}`);
+      logger.error(`Error uploading ${filename} to GCS: ${error}`);
+      if (error instanceof Error) {
+        if (
+          error.message.includes("does not have storage.objects.create access")
+        ) {
+          logger.error(
+            "Service account lacks storage.objects.create permission"
+          );
+        } else if (error.message.includes("bucket does not exist")) {
+          logger.error(
+            `Bucket ${this.BUCKET_NAME} does not exist. Please create it manually.`
+          );
+        }
+      }
       throw new AppError(
         StatusCodes.INTERNAL_SERVER_ERROR,
         "Failed to upload to GCS"
@@ -65,17 +81,33 @@ export class TranscriptionService {
   static async deleteFromGCS(gcsUrl: string): Promise<void> {
     try {
       const fileName = gcsUrl.split("/").pop();
-      if (!fileName) return;
+      if (!fileName) {
+        logger.warn("No filename found in GCS URL, skipping delete");
+        return;
+      }
 
+      logger.info(`Attempting to delete ${fileName} from GCS`);
       const file = this.storage.bucket(this.BUCKET_NAME).file(fileName);
       const [exists] = await file.exists();
+      logger.info(`File ${fileName} exists in GCS: ${exists}`);
 
-      if (!exists) {
+      if (exists) {
         await file.delete();
-        logger.info(`Deleted from GCS: ${gcsUrl}`);
+        logger.info(`Successfully deleted from GCS: ${gcsUrl}`);
+      } else {
+        logger.info(`File ${fileName} does not exist in GCS, skipping delete`);
       }
     } catch (error) {
       logger.error(`Error deleting from GCS: ${error}`);
+      if (error instanceof Error) {
+        if (
+          error.message.includes("does not have storage.objects.delete access")
+        ) {
+          logger.error(
+            "Service account lacks storage.objects.delete permission"
+          );
+        }
+      }
       throw new AppError(
         StatusCodes.INTERNAL_SERVER_ERROR,
         "Failed to delete from GCS"
@@ -90,29 +122,47 @@ export class TranscriptionService {
     );
 
     return new Promise((resolve, reject) => {
-      ffmpeg(inputPath)
-        .toFormat("wav")
-        .audioFilters([
-          "aresample=resample=soxr",
-          "highpass=f=200",
-          "lowpass=f=3000",
-          "afftdn=nf=-25",
-          "loudnorm=I=-16:LRA=11:TP=-1.5",
-          "aformat=channel_layouts=mono",
-        ])
-        .on("end", () => {
-          logger.info(`Audio converted to WAV: ${outputPath}`);
-          resolve(outputPath);
-        })
-        .on("error", (err: Error) => {
-          logger.error(`Error converting audio to WAV: ${err}`);
-          reject(
-            new AppError(
-              StatusCodes.INTERNAL_SERVER_ERROR,
-              "Failed to convert audio to WAV"
-            )
-          );
-        });
+      // Try with basic filters first
+      const attemptConversion = (useFilters: boolean = true) => {
+        const command = ffmpeg(inputPath).toFormat("wav");
+
+        if (useFilters) {
+          command.audioFilters([
+            "highpass=f=200",
+            "lowpass=f=3000",
+            "aformat=channel_layouts=mono",
+          ]);
+        }
+
+        command
+          .outputOption(["-acodec pcm_s16le", "-ac 1", "-ar 16000"])
+          .save(outputPath)
+          .on("start", (commandLine) => {
+            logger.info(`FFmpeg process started: ${commandLine}`);
+          })
+          .on("end", () => {
+            logger.info(`Audio converted to WAV: ${outputPath}`);
+            resolve(outputPath);
+          })
+          .on("error", (err: Error) => {
+            if (useFilters) {
+              logger.warn(
+                `FFmpeg conversion with filters failed, trying without filters: ${err.message}`
+              );
+              attemptConversion(false);
+            } else {
+              logger.error(`Error converting audio to WAV: ${err}`);
+              reject(
+                new AppError(
+                  StatusCodes.INTERNAL_SERVER_ERROR,
+                  "Failed to convert audio to WAV"
+                )
+              );
+            }
+          });
+      };
+
+      attemptConversion();
     });
   }
 
@@ -141,7 +191,7 @@ export class TranscriptionService {
             const match = stderrLine.match(/max_volume: (\d+\.\d+)/);
             if (match) {
               const maxVolume = parseFloat(match[1]);
-              if (maxVolume > -5) musicScore + 1;
+              if (maxVolume > -5) musicScore += 1;
             }
           }
           totalSamples += 1;
@@ -169,9 +219,7 @@ export class TranscriptionService {
     let gcsUrl: string | undefined;
 
     try {
-      if (!audioPath.endsWith(".wav")) {
-        throw new AppError(StatusCodes.BAD_REQUEST, "No Audio file provider");
-      }
+      logger.info(`Starting transcription for audio: ${audioPath}`);
 
       await this.ensureBucketExists();
 
@@ -183,7 +231,7 @@ export class TranscriptionService {
       const contentType = await this.detectContentType(wavePath);
       logger.info(`Detected content type: ${contentType}`);
 
-      if (contentType === "speech") {
+      if (contentType === "music") {
         await unlink(wavePath).catch(() => {});
         return {
           text: "[MUSIC CONTENT DETECTED]",
@@ -234,7 +282,10 @@ export class TranscriptionService {
             ],
           },
         };
+
+      logger.info(`Starting Google Cloud Speech-to-Text operation`);
       const [operation] = await this.speechClient.longRunningRecognize(request);
+      logger.info(`Waiting for transcription operation to complete`);
       const [response] = await operation.promise();
       logger.info(`Transcription response: ${JSON.stringify(response)}`);
 
@@ -268,6 +319,13 @@ export class TranscriptionService {
       };
     } catch (error) {
       logger.error(`Error transcribing audio: ${error}`);
+
+      // cleanup files on error
+      await Promise.all([
+        wavePath ? unlink(wavePath).catch(() => {}) : Promise.resolve(),
+        gcsUrl ? this.deleteFromGCS(gcsUrl).catch(() => {}) : Promise.resolve(),
+      ]);
+
       throw new AppError(
         StatusCodes.INTERNAL_SERVER_ERROR,
         "Failed to transcribe audio"
