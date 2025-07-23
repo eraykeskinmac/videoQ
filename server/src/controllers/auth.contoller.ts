@@ -51,4 +51,13 @@ export class AuthController {
       next(error);
     }
   }
+
+  static async getProfile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = await AuthService.getUserById(req.user?.userId!);
+      res.json(successResponse(user));
+    } catch (error) {
+      next(error);
+    }
+  }
 }

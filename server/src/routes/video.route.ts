@@ -3,7 +3,7 @@ import { VideoController } from "../controllers/video.controller";
 import { validateYoutubeUrl } from "../middleware/validateUrl";
 
 const router = Router();
-router.get("/user", VideoController.getUserVideos);
+router.get("/", VideoController.getUserVideos);
 
 router.get("/:id", VideoController.getVideoById);
 
