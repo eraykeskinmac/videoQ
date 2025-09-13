@@ -1,8 +1,9 @@
 import router, { useRouter } from "next/router";
-import { authApi } from "../auth";
-import { setTokenGetter } from "../client";
-import { User } from "../types";
+
 import { createContext, useContext, useEffect, useState } from "react";
+import { User } from "../api/types";
+import { authApi } from "../api/auth";
+import { setTokenGetter } from "../api/client";
 
 interface AuthContextType {
   user: User | null;

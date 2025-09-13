@@ -1,6 +1,6 @@
 "use client";
 
-import { AuthProvider } from "@/lib/api/hooks/auth";
+import { AuthProvider } from "@/lib/hooks/auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
